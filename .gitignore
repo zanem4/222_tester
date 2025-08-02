@@ -1,11 +1,62 @@
-.htaccess
-css.php
-rpc/
-sites/site*/admin/
-sites/site*/private/
-sites/site*/public/admin/
-sites/site*/public/setup/
-sites/site*/public/theme/
-textpattern/
-HISTORY.txt
-README.txt
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+live_trading/logs/
+live_trading/config.py
+output/
+analysis/group_backtests/
+edge_analysis_results/
+*.parquet
+*.csv
+*.json
+!utils/parameters.json
+
+# API Keys and sensitive data
+.env
+*.key
+*.pem
+secrets.json
+
+# Temporary files
+*.tmp
+*.temp
+*.log
