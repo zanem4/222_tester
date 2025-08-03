@@ -1,0 +1,25 @@
+{
+  "parquet_path": "C:\\Users\\zanem\\OneDrive\\Desktop\\Personal\\222_Backtester\\backtester\\data",
+  "output_dir": "C:\\Users\\zanem\\OneDrive\\Desktop\\Personal\\222_Backtester\\backtester\\output",
+  "use_specific_asset": true,
+  "base": "ZAR",
+  "quote": "JPY",
+  "use_constraints": true,
+  "atr_length": 14,
+  "sma_length": 30,
+  "chunk_size": 5000,
+  "forward_buffer": 60,
+  "max_order_wait_bars": 10,
+  "max_trade_lifespan_bars": 50,
+  "tp_multipliers": [
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0
+  ],
+  "start_date": "2024-01-01T00:00:00",
+  "stop_date": "2024-12-31T23:59:59",
+  "const_norm_price_range_lower": 0.0,
+  "const_norm_price_range_upper": 1.25
+}

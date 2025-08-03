@@ -1,0 +1,1 @@
+worker: python live_trading/run_live_trading.py 
