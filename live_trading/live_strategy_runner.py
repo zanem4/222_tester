@@ -103,16 +103,43 @@ class LiveStrategyRunner:
             print(f"Current time: {current_time}")
             
             print("Calculating metrics...")
-            metrics = calculate_metrics(current_time, time_array, high, low, close, open_prices)
-            print(f"Metrics calculated: {metrics}")
+            try:
+                metrics = calculate_metrics(current_time, time_array, high, low, close, open_prices)
+                print(f"Metrics calculated successfully: {len(metrics)} values")
+            except Exception as e:
+                print(f"Error in calculate_metrics: {e}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': close[-1],
+                    'instrument': instrument
+                }
             
             print("Normalizing metrics...")
-            norm_metrics = normalize_metrics(metrics, self.parameters)
-            print(f"Normalized metrics: {norm_metrics}")
+            try:
+                norm_metrics = normalize_metrics(metrics, self.parameters)
+                print(f"Normalized metrics successfully")
+            except Exception as e:
+                print(f"Error in normalize_metrics: {e}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': close[-1],
+                    'instrument': instrument
+                }
             
             print("Detecting setups...")
-            setups = detect_setups(norm_metrics, self.parameters)
-            print(f"Setups detected: {setups}")
+            try:
+                setups = detect_setups(norm_metrics, self.parameters)
+                print(f"Setups detected: {len(setups) if setups is not None else 0}")
+            except Exception as e:
+                print(f"Error in detect_setups: {e}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': close[-1],
+                    'instrument': instrument
+                }
             
             print("Applying filter...")
             filtered_setups = apply_filter(setups, self.parameters)
