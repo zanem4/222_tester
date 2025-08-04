@@ -166,9 +166,22 @@ class LiveStrategyRunner:
             
             print("Applying filter...")
             try:
-                # apply_filter expects the normalized metrics
-                filtered_setups = apply_filter(setups, self.parameters)
-                print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
+                # For live trading, we only have one current setup, not multiple setups
+                # We need to create a metrics array for the current setup
+                if len(setups) > 0:
+                    # Create a metrics array with the current metrics for each setup
+                    # For live trading, we'll use the current metrics for all setups
+                    current_metrics = np.array([metrics])  # Shape: (1, 25)
+                    
+                    # Apply the constraints from your optimized parameters
+                    # Extract constraint parameters (keys starting with 'const_')
+                    constraints = {k: v for k, v in self.parameters.items() if k.startswith('const_')}
+                    
+                    filtered_setups, filtered_metrics = apply_filter(setups, current_metrics, constraints)
+                    print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
+                else:
+                    filtered_setups = np.array([])
+                    print(f"Filtered setups: 0 (no setups to filter)")
             except Exception as e:
                 print(f"Error in apply_filter: {e}")
                 return {
