@@ -27,5 +27,6 @@ TRADING_CONFIG = {
 
 # Google Sheets Configuration
 SHEETS_CONFIG = {
-    "sheet_url": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit#gid=0"
+    "sheet_url": "https://docs.google.com/spreadsheets/d/1-ab7-Ne7ImcWX8uWN97ud5L0TngJZvE7yQRDZ6QhL6g/edit?pli=1&gid=0#gid=0"
+
 } 
