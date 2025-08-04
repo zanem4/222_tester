@@ -73,6 +73,16 @@ class LiveStrategyRunner:
             df = self.get_market_data(instrument)
             print(f"Got {len(df)} data points for {instrument}")
             
+            # Check if we have enough data
+            if len(df) < 3:  # Need at least 3 bars for 222 pattern
+                print(f"Not enough data for {instrument} (need at least 3 bars)")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': None,
+                    'instrument': instrument
+                }
+            
             # Convert to numpy arrays for your existing strategy
             # Convert datetime to numeric timestamps
             time_array = df['time'].astype(np.int64) // 10**9  # Convert to Unix timestamp
