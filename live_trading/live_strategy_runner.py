@@ -255,8 +255,6 @@ class LiveStrategyRunner:
         print(f"Currency pair: {base_currency}/{quote_currency}")
         
         # Calculate stop loss distance based on your 222 pattern strategy
-        # We need to get the price delta from the 222 pattern
-        # For now, use the price_range from metrics as approximation
         price_range = analysis['metrics'][2] if analysis['metrics'] is not None else 0.001
         stop_loss_distance = price_range  # This is the price delta from 222 pattern
         
@@ -278,8 +276,16 @@ class LiveStrategyRunner:
         # Calculate units based on risk and stop loss distance
         # Convert stop loss distance to pips
         stop_loss_pips = int(stop_loss_distance * 10000)  # Convert to pips
-        units = int(risk_amount / (stop_loss_pips * pip_value))
+        stop_loss_pips = max(1, stop_loss_pips)  # Ensure at least 1 pip
         
+        # Calculate units: risk_amount / (stop_loss_pips * pip_value_per_unit)
+        # pip_value is per 1000 units, so divide by 1000
+        units = int(risk_amount / (stop_loss_pips * pip_value / 1000))
+        
+        print(f"Stop loss pips: {stop_loss_pips}")
+        print(f"Calculated units: {units}")
+        print(f"Expected risk: {abs(units) * stop_loss_pips * pip_value / 1000:.2f} {account_currency}")
+
         # Ensure reasonable position size for margin requirements
         max_units = int(current_balance * 0.1)  # Max 10% of balance as units
         if abs(units) > max_units:
@@ -295,23 +301,29 @@ class LiveStrategyRunner:
         
         # Determine trade direction from setup time sign
         # Positive setup time = long, negative = short
-        side = "buy" if analysis['setup_time'] > 0 else "sell"
+        is_long = analysis['setup_time'] > 0
+        side = "buy" if is_long else "sell"
         
         print(f"Trade direction: {side}")
-        print(f"Expected risk: {abs(units) * stop_loss_pips * pip_value:.2f} {account_currency}")
+        print(f"Expected risk: {abs(units) * stop_loss_pips * pip_value / 1000:.2f} {account_currency}")
         
         # Calculate order price based on 222 pattern strategy
-        # Get the most recent candle data (setup bar)
-        current_high = analysis.get('current_high', analysis['current_price'])
-        current_low = analysis.get('current_low', analysis['current_price'])
+        # Get the setup bar data (most recent completed bar)
+        setup_high = analysis.get('current_high', analysis['current_price'])
+        setup_low = analysis.get('current_low', analysis['current_price'])
         
-        if side == "buy":
+        # Determine trade direction from setup time sign
+        # Positive setup time = long, negative = short
+        is_long = analysis['setup_time'] > 0
+        side = "buy" if is_long else "sell"
+        
+        if is_long:
             # Long trade: place limit order at high of setup bar
-            order_price = current_high
+            order_price = setup_high
             print(f"Long setup: placing limit buy at {order_price:.5f} (high of setup bar)")
         else:
             # Short trade: place limit order at low of setup bar
-            order_price = current_low
+            order_price = setup_low
             print(f"Short setup: placing limit sell at {order_price:.5f} (low of setup bar)")
         
         # Place the LIMIT order (not market FOK)
@@ -368,27 +380,63 @@ class LiveStrategyRunner:
     
     def monitor_positions(self):
         """Monitor and manage open positions"""
-        positions = self.client.get_positions()
-        
-        for position in positions.get('positions', []):
-            instrument = position['instrument']
-            units = int(position['long']['units']) if position['long']['units'] != '0' else int(position['short']['units'])
+        try:
+            positions = self.client.get_positions()
             
-            # Get current price
-            price_data = self.client.get_current_price(instrument)
-            current_price = float(price_data['prices'][0]['bids'][0]['price'])
+            for position in positions.get('positions', []):
+                instrument = position['instrument']
+                long_units = int(position['long']['units']) if position['long']['units'] != '0' else 0
+                short_units = int(position['short']['units']) if position['short']['units'] != '0' else 0
+                
+                if long_units == 0 and short_units == 0:
+                    continue
+                
+                units = long_units if long_units > 0 else short_units
+                is_long = long_units > 0
+                
+                # Get current price
+                price_data = self.client.get_current_price(instrument)
+                current_price = float(price_data['prices'][0]['bids'][0]['price'])
+                
+                # Get position details
+                position_id = position['id']
+                entry_price = float(position['long']['averagePrice'] if is_long else position['short']['averagePrice'])
+                
+                print(f"Monitoring position: {instrument} {units} @ {entry_price}, current: {current_price}")
+                
+                # Calculate stop loss level based on 222 pattern
+                # For now, use a simple ATR-based stop (you'll need to implement the actual 222 pattern stop)
+                stop_distance = 0.005  # 50 pips as placeholder
+                if is_long:
+                    stop_level = entry_price - stop_distance
+                    if current_price <= stop_level:
+                        print(f"Stop loss hit for {instrument} long position")
+                        self.close_position(instrument, units)
+                else:
+                    stop_level = entry_price + stop_distance
+                    if current_price >= stop_level:
+                        print(f"Stop loss hit for {instrument} short position")
+                        self.close_position(instrument, units)
+                
+                # Update trade status in logger
+                self.logger.update_trade_status(position_id, current_price, datetime.utcnow())
+                
+        except Exception as e:
+            print(f"Error monitoring positions: {e}")
+
+    def close_position(self, instrument: str, units: int):
+        """Close a position"""
+        try:
+            result = self.client.close_position(instrument, units)
+            print(f"Position closed: {result}")
             
-            # Update trade status in logger
-            order_id = position.get('id')
-            if order_id:
-                self.logger.update_trade_status(order_id, current_price, datetime.utcnow())
-            
-            # Basic exit conditions (implement your actual exit logic)
-            # Example: Close position if it's been open for more than 24 hours
-            # You'll need to track entry time for each position
-            
-            # For now, just log the position
-            print(f"Monitoring position: {instrument} {units} @ {current_price}")
+            # Log the exit
+            if hasattr(self, 'logger'):
+                # You'll need to implement exit logging
+                pass
+                
+        except Exception as e:
+            print(f"Error closing position: {e}")
     
     def run_live_trading(self, instruments: List[str], check_interval: int = 300):
         """
