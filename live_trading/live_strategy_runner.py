@@ -117,7 +117,29 @@ class LiveStrategyRunner:
             
             print("Normalizing metrics...")
             try:
-                norm_metrics = normalize_metrics(metrics, self.parameters)
+                # Unpack the metrics array into individual parameters
+                # Based on calculate_metrics return: [setup_idx, sma, price_range, atr, body1_size, body2_size, body3_size, upwick1, downwick1, upwick2, downwick2, upwick3, downwick3, norm_sma, norm_price_range, norm_body1, norm_body2, norm_body3, norm_upwick1, norm_downwick1, norm_upwick2, norm_downwick2, norm_upwick3, norm_downwick3]
+                
+                # Extract the raw metrics (first 13 values)
+                setup_idx = metrics[0]
+                sma = metrics[1]
+                price_range = metrics[2]
+                atr = metrics[3]
+                body1_size = metrics[4]
+                body2_size = metrics[5]
+                body3_size = metrics[6]
+                upwick1 = metrics[7]
+                downwick1 = metrics[8]
+                upwick2 = metrics[9]
+                downwick2 = metrics[10]
+                upwick3 = metrics[11]
+                downwick3 = metrics[12]
+                
+                # For live trading, we don't need price_delta, so use 0
+                price_delta = 0.0
+                
+                norm_metrics = normalize_metrics(price_delta, sma, price_range, body1_size, body2_size, body3_size,
+                                               upwick1, downwick1, upwick2, downwick2, upwick3, downwick3, atr)
                 print(f"Normalized metrics successfully")
             except Exception as e:
                 print(f"Error in normalize_metrics: {e}")
