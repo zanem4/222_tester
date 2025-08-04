@@ -161,3 +161,27 @@ class OandaClient:
         
         response = requests.get(url, headers=self.headers, params=params)
         return response.json() 
+
+    def get_exchange_rate(self, from_currency: str, to_currency: str) -> float:
+        """Get exchange rate between two currencies"""
+        if from_currency == to_currency:
+            return 1.0
+        
+        # Use a major pair that includes both currencies
+        # For example, to get EUR/USD rate, use EUR_USD
+        # For CAD/USD rate, use USD_CAD and invert
+        pair = f"{from_currency}_{to_currency}"
+        
+        try:
+            price_data = self.get_current_price(pair)
+            return float(price_data['prices'][0]['bids'][0]['price'])
+        except:
+            # Try inverse pair
+            try:
+                pair = f"{to_currency}_{from_currency}"
+                price_data = self.get_current_price(pair)
+                return 1.0 / float(price_data['prices'][0]['bids'][0]['price'])
+            except:
+                # Fallback to 1.0 if can't get rate
+                print(f"Warning: Could not get exchange rate for {from_currency}/{to_currency}")
+                return 1.0 
