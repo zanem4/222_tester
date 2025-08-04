@@ -152,7 +152,8 @@ class LiveStrategyRunner:
             
             print("Detecting setups...")
             try:
-                setups = detect_setups(norm_metrics, self.parameters)
+                # detect_setups expects raw price arrays, not normalized metrics
+                setups = detect_setups(time_array, high, low, close, open_prices)
                 print(f"Setups detected: {len(setups) if setups is not None else 0}")
             except Exception as e:
                 print(f"Error in detect_setups: {e}")
@@ -164,8 +165,18 @@ class LiveStrategyRunner:
                 }
             
             print("Applying filter...")
-            filtered_setups = apply_filter(setups, self.parameters)
-            print(f"Filtered setups: {filtered_setups}")
+            try:
+                # apply_filter expects the normalized metrics
+                filtered_setups = apply_filter(setups, self.parameters)
+                print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
+            except Exception as e:
+                print(f"Error in apply_filter: {e}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': close[-1],
+                    'instrument': instrument
+                }
             
             # Get the most recent setup
             setup_time = filtered_setups[-1] if len(filtered_setups) > 0 else None
