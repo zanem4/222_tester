@@ -261,10 +261,10 @@ class LiveStrategyRunner:
             if order_result.get('orderFillTransaction'):
                 # Convert numpy arrays to lists for JSON serialization
                 serializable_analysis = {
-                    'setup_time': analysis['setup_time'],
-                    'current_price': analysis['current_price'],
+                    'setup_time': int(analysis['setup_time']) if analysis['setup_time'] is not None else None,
+                    'current_price': float(analysis['current_price']) if analysis['current_price'] is not None else None,
                     'instrument': analysis['instrument'],
-                    'metrics': analysis['metrics'].tolist() if analysis['metrics'] is not None else None
+                    'metrics': [float(x) for x in analysis['metrics']] if analysis['metrics'] is not None else None
                 }
                 
                 trade_info = {
