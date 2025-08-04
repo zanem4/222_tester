@@ -15,6 +15,8 @@ from strategy.calculate_metrics import calculate_metrics
 from strategy.normalize_metrics import normalize_metrics
 from strategy.apply_filter import apply_filter
 from trade_logger import LiveTradeLogger
+from sheets_logger import GoogleSheetsLogger
+from config import SHEETS_CONFIG
 
 class LiveStrategyRunner:
     def __init__(self, api_token: str, account_id: str, 
@@ -35,6 +37,14 @@ class LiveStrategyRunner:
         
         # Initialize trade logger
         self.logger = LiveTradeLogger()
+        
+        # Initialize Google Sheets logger
+        try:
+            self.sheets_logger = GoogleSheetsLogger(SHEETS_CONFIG["sheet_url"])
+            print("Google Sheets logger initialized successfully")
+        except Exception as e:
+            print(f"Warning: Could not initialize Google Sheets logger: {e}")
+            self.sheets_logger = None
         
     def load_parameters(self) -> Dict:
         """Load strategy parameters"""
@@ -128,6 +138,13 @@ class LiveStrategyRunner:
                 
                 # Log the trade entry
                 self.logger.log_trade_entry(trade_info, analysis)
+                
+                # Log to Google Sheets if available
+                if self.sheets_logger:
+                    try:
+                        self.sheets_logger.log_trade_entry(trade_info, analysis)
+                    except Exception as e:
+                        print(f"Warning: Could not log to Google Sheets: {e}")
                 
                 self.trade_history.append(trade_info)
                 return {'status': 'success', 'trade': trade_info}

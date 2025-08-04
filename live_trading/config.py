@@ -24,3 +24,8 @@ TRADING_CONFIG = {
     "max_daily_trades": 10,
     "session_hours": [2, 22],
 } 
+
+# Google Sheets Configuration
+SHEETS_CONFIG = {
+    "sheet_url": "https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit#gid=0"
+} 
