@@ -41,11 +41,25 @@ def main():
     # Test connection
     try:
         account_info = runner.client.get_account_info()
-        print(f"Connected to account: {account_info['account']['name']}")
-        print(f"Balance: {account_info['account']['balance']}")
-        print(f"Currency: {account_info['account']['currency']}")
+        
+        # Handle different response formats
+        if 'account' in account_info:
+            account = account_info['account']
+            account_name = account.get('name', 'Unknown Account')
+            balance = account.get('balance', 'Unknown')
+            currency = account.get('currency', 'Unknown')
+        else:
+            # Fallback if response structure is different
+            account_name = account_info.get('name', 'Unknown Account')
+            balance = account_info.get('balance', 'Unknown')
+            currency = account_info.get('currency', 'Unknown')
+            
+        print(f"Connected to account: {account_name}")
+        print(f"Balance: {balance}")
+        print(f"Currency: {currency}")
     except Exception as e:
         print(f"Failed to connect to OANDA: {e}")
+        print(f"Account info response: {account_info if 'account_info' in locals() else 'No response'}")
         return
     
     # Start live trading with error handling
