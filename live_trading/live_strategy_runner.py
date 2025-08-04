@@ -259,22 +259,30 @@ class LiveStrategyRunner:
             )
             
             if order_result.get('orderFillTransaction'):
+                # Convert numpy arrays to lists for JSON serialization
+                serializable_analysis = {
+                    'setup_time': analysis['setup_time'],
+                    'current_price': analysis['current_price'],
+                    'instrument': analysis['instrument'],
+                    'metrics': analysis['metrics'].tolist() if analysis['metrics'] is not None else None
+                }
+                
                 trade_info = {
                     'order_id': order_result['orderFillTransaction']['id'],
                     'instrument': analysis['instrument'],
                     'units': units,
                     'price': float(order_result['orderFillTransaction']['price']),
                     'time': datetime.utcnow(),
-                    'analysis': analysis
+                    'analysis': serializable_analysis  # Use serializable version
                 }
                 
                 # Log the trade entry
-                self.logger.log_trade_entry(trade_info, analysis)
+                self.logger.log_trade_entry(trade_info, serializable_analysis)
                 
                 # Log to Google Sheets if available
                 if self.sheets_logger:
                     try:
-                        self.sheets_logger.log_trade_entry(trade_info, analysis)
+                        self.sheets_logger.log_trade_entry(trade_info, serializable_analysis)
                     except Exception as e:
                         print(f"Warning: Could not log to Google Sheets: {e}")
                 
