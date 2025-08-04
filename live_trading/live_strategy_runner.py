@@ -1,6 +1,7 @@
 import time
 import json
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import sys
@@ -71,15 +72,15 @@ class LiveStrategyRunner:
         df = self.get_market_data(instrument)
         
         # Convert to numpy arrays for your existing strategy
-        time_array = df['time'].values
+        # Convert datetime to numeric timestamps
+        time_array = df['time'].astype(np.int64) // 10**9  # Convert to Unix timestamp
         high = df['high'].values
         low = df['low'].values
         close = df['close'].values
-        open_prices = df['open'].values  # Add this line
+        open_prices = df['open'].values
         
         # Use your existing strategy modules
-        # You need to provide a setup_time for calculate_metrics
-        # For live trading, you might want to use the current time or a recent timestamp
+        # For live trading, use the current timestamp
         current_time = time_array[-1] if len(time_array) > 0 else 0
         
         metrics = calculate_metrics(current_time, time_array, high, low, close, open_prices)
