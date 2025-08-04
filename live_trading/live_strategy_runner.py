@@ -166,19 +166,31 @@ class LiveStrategyRunner:
             
             print("Applying filter...")
             try:
-                # For live trading, we only have one current setup, not multiple setups
-                # We need to create a metrics array for the current setup
+                # For live trading, we need to handle multiple setups properly
                 if len(setups) > 0:
-                    # Create a metrics array with the current metrics for each setup
-                    # For live trading, we'll use the current metrics for all setups
-                    current_metrics = np.array([metrics])  # Shape: (1, 25)
+                    # The issue is that detect_setups found multiple setups in historical data
+                    # But we only have metrics for the current time
+                    # For live trading, we only care about the most recent setup
                     
-                    # Apply the constraints from your optimized parameters
-                    # Extract constraint parameters (keys starting with 'const_')
-                    constraints = {k: v for k, v in self.parameters.items() if k.startswith('const_')}
+                    # Get the most recent setup (last in the array)
+                    most_recent_setup = setups[-1] if len(setups) > 0 else None
                     
-                    filtered_setups, filtered_metrics = apply_filter(setups, current_metrics, constraints)
-                    print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
+                    if most_recent_setup is not None:
+                        # Create a single setup array with just the most recent setup
+                        recent_setups = np.array([most_recent_setup])
+                        
+                        # Create a metrics array with the current metrics for this setup
+                        current_metrics = np.array([metrics])  # Shape: (1, 25)
+                        
+                        # Apply the constraints from your optimized parameters
+                        constraints = {k: v for k, v in self.parameters.items() if k.startswith('const_')}
+                        
+                        filtered_setups, filtered_metrics = apply_filter(recent_setups, current_metrics, constraints)
+                        print(f"Most recent setup: {most_recent_setup}")
+                        print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
+                    else:
+                        filtered_setups = np.array([])
+                        print(f"Filtered setups: 0 (no recent setup)")
                 else:
                     filtered_setups = np.array([])
                     print(f"Filtered setups: 0 (no setups to filter)")
