@@ -75,9 +75,14 @@ class LiveStrategyRunner:
         high = df['high'].values
         low = df['low'].values
         close = df['close'].values
+        open_prices = df['open'].values  # Add this line
         
         # Use your existing strategy modules
-        metrics = calculate_metrics(high, low, close)
+        # You need to provide a setup_time for calculate_metrics
+        # For live trading, you might want to use the current time or a recent timestamp
+        current_time = time_array[-1] if len(time_array) > 0 else 0
+        
+        metrics = calculate_metrics(current_time, time_array, high, low, close, open_prices)
         norm_metrics = normalize_metrics(metrics, self.parameters)
         setups = detect_setups(norm_metrics, self.parameters)
         filtered_setups = apply_filter(setups, self.parameters)
