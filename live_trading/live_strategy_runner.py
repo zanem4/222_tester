@@ -68,35 +68,63 @@ class LiveStrategyRunner:
     
     def analyze_market(self, instrument: str) -> Dict:
         """Analyze current market conditions using your strategy"""
-        # Get market data
-        df = self.get_market_data(instrument)
-        
-        # Convert to numpy arrays for your existing strategy
-        # Convert datetime to numeric timestamps
-        time_array = df['time'].astype(np.int64) // 10**9  # Convert to Unix timestamp
-        high = df['high'].values
-        low = df['low'].values
-        close = df['close'].values
-        open_prices = df['open'].values
-        
-        # Use your existing strategy modules
-        # For live trading, use the current timestamp
-        current_time = time_array[-1] if len(time_array) > 0 else 0
-        
-        metrics = calculate_metrics(current_time, time_array, high, low, close, open_prices)
-        norm_metrics = normalize_metrics(metrics, self.parameters)
-        setups = detect_setups(norm_metrics, self.parameters)
-        filtered_setups = apply_filter(setups, self.parameters)
-        
-        # Get the most recent setup
-        setup_time = filtered_setups[-1] if len(filtered_setups) > 0 else None
-        
-        return {
-            'setup_time': setup_time,
-            'metrics': norm_metrics,
-            'current_price': close[-1],
-            'instrument': instrument
-        }
+        try:
+            # Get market data
+            df = self.get_market_data(instrument)
+            print(f"Got {len(df)} data points for {instrument}")
+            
+            # Convert to numpy arrays for your existing strategy
+            # Convert datetime to numeric timestamps
+            time_array = df['time'].astype(np.int64) // 10**9  # Convert to Unix timestamp
+            high = df['high'].values
+            low = df['low'].values
+            close = df['close'].values
+            open_prices = df['open'].values
+            
+            print(f"Data ranges - High: {high.min():.5f} to {high.max():.5f}")
+            print(f"Time range: {time_array[0]} to {time_array[-1]}")
+            
+            # Use your existing strategy modules
+            # For live trading, use the current timestamp
+            current_time = time_array[-1] if len(time_array) > 0 else 0
+            print(f"Current time: {current_time}")
+            
+            print("Calculating metrics...")
+            metrics = calculate_metrics(current_time, time_array, high, low, close, open_prices)
+            print(f"Metrics calculated: {metrics}")
+            
+            print("Normalizing metrics...")
+            norm_metrics = normalize_metrics(metrics, self.parameters)
+            print(f"Normalized metrics: {norm_metrics}")
+            
+            print("Detecting setups...")
+            setups = detect_setups(norm_metrics, self.parameters)
+            print(f"Setups detected: {setups}")
+            
+            print("Applying filter...")
+            filtered_setups = apply_filter(setups, self.parameters)
+            print(f"Filtered setups: {filtered_setups}")
+            
+            # Get the most recent setup
+            setup_time = filtered_setups[-1] if len(filtered_setups) > 0 else None
+            
+            return {
+                'setup_time': setup_time,
+                'metrics': norm_metrics,
+                'current_price': close[-1],
+                'instrument': instrument
+            }
+            
+        except Exception as e:
+            print(f"Error in analyze_market for {instrument}: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'setup_time': None,
+                'metrics': None,
+                'current_price': None,
+                'instrument': instrument
+            }
     
     def execute_trade(self, analysis: Dict) -> Dict:
         """Execute a trade based on strategy analysis"""
