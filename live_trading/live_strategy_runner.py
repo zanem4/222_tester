@@ -210,6 +210,8 @@ class LiveStrategyRunner:
                 'setup_time': setup_time,
                 'metrics': norm_metrics,
                 'current_price': close[-1],
+                'current_high': high[-1],  # Add this
+                'current_low': low[-1],    # Add this
                 'instrument': instrument
             }
             
@@ -229,35 +231,101 @@ class LiveStrategyRunner:
         if not analysis['setup_time']:
             return {'status': 'no_setup'}
         
-        # Calculate position size based on your risk management
+        # Get REAL-TIME account balance before each trade
         account_info = self.client.get_account_info()
-        balance = float(account_info['account']['balance'])
-        risk_per_trade = self.parameters.get('risk_per_trade', 0.01)
-        risk_amount = balance * risk_per_trade
+        current_balance = float(account_info['account']['balance'])
+        account_currency = account_info['account']['currency']
         
-        # Calculate stop loss distance (you'll need to implement this based on your strategy)
-        stop_distance_pips = 50  # Placeholder - implement based on your strategy
-        stop_distance_price = stop_distance_pips / 10000  # Convert pips to price
+        print(f"=== TRADE EXECUTION ===")
+        print(f"Account balance: {current_balance} {account_currency}")
+        print(f"Account currency: {account_currency}")
         
-        # Calculate units based on risk
-        units = int(risk_amount / stop_distance_price)
+        # Calculate 1% risk
+        risk_per_trade = 0.01  # 1%
+        risk_amount = current_balance * risk_per_trade
+        
+        print(f"Risk per trade: {risk_per_trade:.2%}")
+        print(f"Risk amount: {risk_amount:.2f} {account_currency}")
+        
+        # Calculate proper position size based on currency pair
+        instrument = analysis['instrument']
+        base_currency = instrument[:3]  # First 3 chars (NZD in NZD_USD)
+        quote_currency = instrument[4:]  # Last 3 chars (USD in NZD_USD)
+        
+        print(f"Currency pair: {base_currency}/{quote_currency}")
+        
+        # Calculate stop loss distance based on your 222 pattern strategy
+        # We need to get the price delta from the 222 pattern
+        # For now, use the price_range from metrics as approximation
+        price_range = analysis['metrics'][2] if analysis['metrics'] is not None else 0.001
+        stop_loss_distance = price_range  # This is the price delta from 222 pattern
+        
+        print(f"Price range (222 pattern): {price_range:.5f}")
+        print(f"Stop loss distance: {stop_loss_distance:.5f}")
+        
+        # Calculate pip value in account currency
+        if quote_currency == account_currency:
+            # Direct conversion (e.g., NZD_USD with USD account)
+            pip_value = 0.10  # $0.10 per 1,000 units per pip
+        else:
+            # Need conversion (e.g., EUR_JPY with USD account)
+            exchange_rate = self.client.get_exchange_rate(quote_currency, account_currency)
+            pip_value = 0.10 * exchange_rate
+            print(f"Exchange rate {quote_currency}/{account_currency}: {exchange_rate:.5f}")
+        
+        print(f"Pip value: {pip_value:.5f} {account_currency} per 1,000 units")
+        
+        # Calculate units based on risk and stop loss distance
+        # Convert stop loss distance to pips
+        stop_loss_pips = int(stop_loss_distance * 10000)  # Convert to pips
+        units = int(risk_amount / (stop_loss_pips * pip_value))
+        
+        # Ensure reasonable position size for margin requirements
+        max_units = int(current_balance * 0.1)  # Max 10% of balance as units
+        if abs(units) > max_units:
+            units = max_units if units > 0 else -max_units
+            print(f"Position size capped at {max_units} units for margin safety")
         
         # Ensure minimum position size
         if abs(units) < 1000:
             units = 1000 if units > 0 else -1000
+            print(f"Position size set to minimum {1000} units")
         
-        # Determine trade direction from your strategy
-        # This is a placeholder - implement based on your strategy logic
-        side = "buy"  # or "sell" based on your analysis
+        print(f"Final units: {units}")
         
-        # Place the order
+        # Determine trade direction from setup time sign
+        # Positive setup time = long, negative = short
+        side = "buy" if analysis['setup_time'] > 0 else "sell"
+        
+        print(f"Trade direction: {side}")
+        print(f"Expected risk: {abs(units) * stop_loss_pips * pip_value:.2f} {account_currency}")
+        
+        # Calculate order price based on 222 pattern strategy
+        # Get the most recent candle data (setup bar)
+        current_high = analysis.get('current_high', analysis['current_price'])
+        current_low = analysis.get('current_low', analysis['current_price'])
+        
+        if side == "buy":
+            # Long trade: place limit order at high of setup bar
+            order_price = current_high
+            print(f"Long setup: placing limit buy at {order_price:.5f} (high of setup bar)")
+        else:
+            # Short trade: place limit order at low of setup bar
+            order_price = current_low
+            print(f"Short setup: placing limit sell at {order_price:.5f} (low of setup bar)")
+        
+        # Place the LIMIT order (not market FOK)
         try:
-            order_result = self.client.place_market_order(
+            order_result = self.client.place_limit_order(
                 instrument=analysis['instrument'],
                 units=units,
+                price=order_price,
                 side=side
             )
             
+            print(f"Limit order placed: {order_result}")
+            
+            # Check if order was immediately filled
             if order_result.get('orderFillTransaction'):
                 # Convert numpy arrays to lists for JSON serialization
                 serializable_analysis = {
@@ -276,6 +344,8 @@ class LiveStrategyRunner:
                     'analysis': serializable_analysis  # Use serializable version
                 }
                 
+                print(f"Order immediately filled at {trade_info['price']:.5f}")
+                
                 # Log the trade entry
                 self.logger.log_trade_entry(trade_info, serializable_analysis)
                 
@@ -289,7 +359,9 @@ class LiveStrategyRunner:
                 self.trade_history.append(trade_info)
                 return {'status': 'success', 'trade': trade_info}
             else:
-                return {'status': 'failed', 'error': order_result}
+                # Order placed but not filled yet
+                print(f"Limit order placed but not filled yet. Order ID: {order_result.get('orderCreateTransaction', {}).get('id')}")
+                return {'status': 'pending', 'order': order_result}
                 
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
