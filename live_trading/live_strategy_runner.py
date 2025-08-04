@@ -86,13 +86,16 @@ class LiveStrategyRunner:
             # Convert to numpy arrays for your existing strategy
             # Convert datetime to numeric timestamps
             time_array = df['time'].astype(np.int64) // 10**9  # Convert to Unix timestamp
+            time_array = time_array.values  # Convert to numpy array
             high = df['high'].values
             low = df['low'].values
             close = df['close'].values
             open_prices = df['open'].values
             
             print(f"Data ranges - High: {high.min():.5f} to {high.max():.5f}")
-            print(f"Time range: {time_array[0]} to {time_array[-1]}")
+            print(f"Time array length: {len(time_array)}")
+            if len(time_array) > 0:
+                print(f"Time range: {time_array[0]} to {time_array[-1]}")
             
             # Use your existing strategy modules
             # For live trading, use the current timestamp
