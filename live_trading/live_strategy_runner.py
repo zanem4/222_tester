@@ -104,6 +104,11 @@ class LiveStrategyRunner:
             try:
                 setups = detect_setups(time_array, high, low, close, open_prices)
                 print(f"Setups detected: {len(setups) if setups is not None else 0}")
+                
+                # Debug: Print all setup times
+                if len(setups) > 0:
+                    print(f"All setup times: {setups}")
+                    print(f"Last 3 bar times: {time_array[-3:]}")
             except Exception as e:
                 print(f"Error in detect_setups: {e}")
                 return {
@@ -127,6 +132,9 @@ class LiveStrategyRunner:
             most_recent_setup = setups[-1]
             setup_time = abs(most_recent_setup)  # Remove sign for now
             
+            print(f"Most recent setup time: {setup_time}")
+            print(f"Last 3 bar times: {time_array[-3:]}")
+            
             # Check if this setup is in the last 3 bars
             setup_idx = np.where(time_array == setup_time)[0]
             if len(setup_idx) == 0:
@@ -141,8 +149,13 @@ class LiveStrategyRunner:
             setup_idx = setup_idx[0]
             last_3_bars_start = len(time_array) - 3
             
+            print(f"Setup index: {setup_idx}")
+            print(f"Last 3 bars start index: {last_3_bars_start}")
+            print(f"Total bars: {len(time_array)}")
+            
             if setup_idx < last_3_bars_start:
                 print(f"Setup found but not in last 3 bars for {instrument}")
+                print(f"Setup is at index {setup_idx}, but we need index >= {last_3_bars_start}")
                 return {
                     'setup_time': None,
                     'metrics': None,
@@ -503,11 +516,11 @@ class LiveStrategyRunner:
                     # Analyze market
                     analysis = self.analyze_market(instrument)
                     
-                    # Execute trade if setup found
-                    if analysis['setup_time']:
+                    # ONLY execute trade if setup_time is not None
+                    if analysis['setup_time'] is not None:
                         print(f"Setup found for {instrument}, executing trade...")
-                        result = self.execute_trade(analysis)
-                        print(f"Trade result: {result}")
+                        trade_result = self.execute_trade(analysis)
+                        print(f"Trade result: {trade_result}")
                     else:
                         print(f"No setup for {instrument}")
                 
