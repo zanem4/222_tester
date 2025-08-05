@@ -34,9 +34,7 @@ class LiveTradeLogger:
             'timestamp', 'instrument', 'action', 'units', 'price', 'order_id',
             'setup_time', 'entry_metrics', 'exit_reason', 'exit_price', 'exit_time',
             'duration_minutes', 'pnl_pips', 'pnl_usd', 'max_rr', 'win_loss',
-            'stop_hit', 'tp1_hit', 'tp2_hit', 'tp3_hit', 'tp4_hit', 'tp5_hit',
-            'tp1_timing', 'tp2_timing', 'tp3_timing', 'tp4_timing', 'tp5_timing',
-            'max_drawdown_pips', 'max_drawdown_pct', 'max_profit_before_stop_pips'
+            'stop_hit', 'tp_hit', 'tp_timing', 'max_drawdown_pips', 'max_drawdown_pct'
         ]
         
         with open(self.session_log_path, 'w', newline='') as f:
@@ -66,19 +64,10 @@ class LiveTradeLogger:
             'max_rr': None,
             'win_loss': None,
             'stop_hit': None,
-            'tp1_hit': None,
-            'tp2_hit': None,
-            'tp3_hit': None,
-            'tp4_hit': None,
-            'tp5_hit': None,
-            'tp1_timing': None,
-            'tp2_timing': None,
-            'tp3_timing': None,
-            'tp4_timing': None,
-            'tp5_timing': None,
+            'tp_hit': None,
+            'tp_timing': None,
             'max_drawdown_pips': None,
-            'max_drawdown_pct': None,
-            'max_profit_before_stop_pips': None
+            'max_drawdown_pct': None
         }
         
         # Store active trade
@@ -89,7 +78,7 @@ class LiveTradeLogger:
             'instrument': trade_info['instrument'],
             'units': trade_info['units'],
             'direction': 'long' if trade_info['units'] > 0 else 'short',
-            'tp_levels': self.calculate_tp_levels(trade_info['price'], trade_info['units']),
+            'tp_level': self.calculate_tp_level(trade_info['price'], trade_info['units']),
             'stop_level': self.calculate_stop_level(trade_info['price'], trade_info['units']),
             'max_profit_pips': 0,
             'max_drawdown_pips': 0,
@@ -101,17 +90,16 @@ class LiveTradeLogger:
         
         print(f"Trade logged: {trade_info['instrument']} {trade_info['units']} @ {trade_info['price']}")
     
-    def calculate_tp_levels(self, entry_price: float, units: int) -> List[float]:
-        """Calculate take profit levels based on your strategy parameters"""
-        # This should match your backtesting TP calculation
-        # You'll need to implement this based on your strategy
-        tp_multipliers = [1.0, 1.5, 2.0, 2.5, 3.0]  # From your parameters
-        atr_value = 0.001  # You'll need to calculate this from market data
+    def calculate_tp_level(self, entry_price: float, units: int) -> float:
+        """Calculate take profit level (2.0RR only)"""
+        # Get price range from the trade data
+        price_range = 0.001  # You'll need to pass this from the strategy
+        tp_multiplier = 2.0
         
         if units > 0:  # Long trade
-            return [entry_price + (multiplier * atr_value) for multiplier in tp_multipliers]
+            return entry_price + (tp_multiplier * price_range)
         else:  # Short trade
-            return [entry_price - (multiplier * atr_value) for multiplier in tp_multipliers]
+            return entry_price - (tp_multiplier * price_range)
     
     def calculate_stop_level(self, entry_price: float, units: int) -> float:
         """Calculate stop loss level"""
@@ -171,8 +159,8 @@ class LiveTradeLogger:
         
         # Determine exit details
         stop_hit = exit_reason == 'stop_loss'
-        tp_hits = self.calculate_tp_hits(trade, exit_price, exit_reason)
-        tp_timings = self.calculate_tp_timings(trade, exit_time)
+        tp_hit = self.calculate_tp_hit(trade, exit_price, exit_reason)
+        tp_timing = self.calculate_tp_timing(trade, exit_time)
         
         # Create exit record
         exit_record = {
@@ -193,16 +181,8 @@ class LiveTradeLogger:
             'max_rr': max_rr,
             'win_loss': win_loss,
             'stop_hit': stop_hit,
-            'tp1_hit': tp_hits[0],
-            'tp2_hit': tp_hits[1],
-            'tp3_hit': tp_hits[2],
-            'tp4_hit': tp_hits[3],
-            'tp5_hit': tp_hits[4],
-            'tp1_timing': tp_timings[0],
-            'tp2_timing': tp_timings[1],
-            'tp3_timing': tp_timings[2],
-            'tp4_timing': tp_timings[3],
-            'tp5_timing': tp_timings[4],
+            'tp_hit': tp_hit,
+            'tp_timing': tp_timing,
             'max_drawdown_pips': trade['max_drawdown_pips'],
             'max_drawdown_pct': (trade['max_drawdown_pips'] / trade['max_profit_pips'] * 100) if trade['max_profit_pips'] > 0 else 0,
             'max_profit_before_stop_pips': trade['max_profit_pips']
@@ -223,27 +203,24 @@ class LiveTradeLogger:
         
         print(f"Trade exit logged: {trade['instrument']} @ {exit_price} - {exit_reason}")
     
-    def calculate_tp_hits(self, trade: Dict, exit_price: float, exit_reason: str) -> List[bool]:
-        """Calculate which take profit levels were hit"""
-        tp_levels = trade['tp_levels']
+    def calculate_tp_hit(self, trade: Dict, exit_price: float, exit_reason: str) -> bool:
+        """Calculate if the 2.0RR take profit level was hit"""
+        tp_level = trade['tp_level']
         direction = trade['direction']
         
-        hits = [False] * 5
-        
         if exit_reason == 'take_profit':
-            for i, tp_level in enumerate(tp_levels):
-                if direction == 'long' and exit_price >= tp_level:
-                    hits[i] = True
-                elif direction == 'short' and exit_price <= tp_level:
-                    hits[i] = True
+            if direction == 'long' and exit_price >= tp_level:
+                return True
+            elif direction == 'short' and exit_price <= tp_level:
+                return True
         
-        return hits
+        return False
     
-    def calculate_tp_timings(self, trade: Dict, exit_time: datetime) -> List[Optional[float]]:
-        """Calculate timing for each take profit level"""
+    def calculate_tp_timing(self, trade: Dict, exit_time: datetime) -> Optional[float]:
+        """Calculate timing for the 2.0RR take profit level"""
         # This is a simplified version - you'll need to track actual TP hit times
-        # For now, return None for all (indicating not tracked)
-        return [None] * 5
+        # For now, return None (indicating not tracked)
+        return None
     
     def write_trade_record(self, record: Dict):
         """Write a trade record to the CSV file"""
@@ -255,12 +232,9 @@ class LiveTradeLogger:
                 record['setup_time'], record['entry_metrics'], record['exit_reason'],
                 record['exit_price'], record['exit_time'], record['duration_minutes'],
                 record['pnl_pips'], record['pnl_usd'], record['max_rr'],
-                record['win_loss'], record['stop_hit'], record['tp1_hit'],
-                record['tp2_hit'], record['tp3_hit'], record['tp4_hit'],
-                record['tp5_hit'], record['tp1_timing'], record['tp2_timing'],
-                record['tp3_timing'], record['tp4_timing'], record['tp5_timing'],
-                record['max_drawdown_pips'], record['max_drawdown_pct'],
-                record['max_profit_before_stop_pips']
+                record['win_loss'], record['stop_hit'], record['tp_hit'],
+                record['tp_timing'], record['max_drawdown_pips'],
+                record['max_drawdown_pct']
             ])
     
     def get_session_summary(self) -> Dict:
@@ -311,16 +285,8 @@ class LiveTradeLogger:
                 'win_loss': exit['win_loss'],
                 'max_rr': exit['max_rr'],
                 'stop_hit': exit['stop_hit'],
-                'tp1_hit': exit['tp1_hit'],
-                'tp2_hit': exit['tp2_hit'],
-                'tp3_hit': exit['tp3_hit'],
-                'tp4_hit': exit['tp4_hit'],
-                'tp5_hit': exit['tp5_hit'],
-                'tp1_timing': exit['tp1_timing'],
-                'tp2_timing': exit['tp2_timing'],
-                'tp3_timing': exit['tp3_timing'],
-                'tp4_timing': exit['tp4_timing'],
-                'tp5_timing': exit['tp5_timing'],
+                'tp_hit': exit['tp_hit'],
+                'tp_timing': exit['tp_timing'],
                 'max_drawdown_pips': exit['max_drawdown_pips'],
                 'max_drawdown_pct': exit['max_drawdown_pct'],
                 'max_profit_before_stop_pips': exit['max_profit_before_stop_pips']
