@@ -32,9 +32,7 @@ class GoogleSheetsLogger:
                 'timestamp', 'instrument', 'action', 'units', 'price', 'order_id',
                 'setup_time', 'entry_metrics', 'exit_reason', 'exit_price', 'exit_time',
                 'duration_minutes', 'pnl_pips', 'pnl_usd', 'max_rr', 'win_loss',
-                'stop_hit', 'tp1_hit', 'tp2_hit', 'tp3_hit', 'tp4_hit', 'tp5_hit',
-                'tp1_timing', 'tp2_timing', 'tp3_timing', 'tp4_timing', 'tp5_timing',
-                'max_drawdown_pips', 'max_drawdown_pct', 'max_profit_before_stop_pips'
+                'stop_hit', 'tp_hit', 'tp_timing', 'max_drawdown_pips', 'max_drawdown_pct'
             ]
             self.sheet.append_row(headers)
         
