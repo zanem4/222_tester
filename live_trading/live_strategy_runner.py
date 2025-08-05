@@ -57,19 +57,21 @@ class LiveStrategyRunner:
         # Calculate start time
         start_time = datetime.utcnow() - timedelta(hours=lookback_hours)
         
-        # Get historical data
+        # Get historical data - LIMIT TO 30 BARS
         df = self.client.get_historical_data(
             instrument=instrument,
-            granularity="M5",  # 5-minute candles
+            granularity="M1",  # 1-minute candles
+            count=30,  # ONLY 30 BARS
             from_time=start_time.isoformat() + "Z"
         )
         
+        print(f"Retrieved {len(df)} bars for {instrument}")
         return df
     
     def analyze_market(self, instrument: str) -> Dict:
         """Analyze current market conditions using your strategy"""
         try:
-            # Get market data
+            # Get market data - ONLY 30 BARS
             df = self.get_market_data(instrument)
             print(f"Got {len(df)} data points for {instrument}")
             
@@ -84,7 +86,6 @@ class LiveStrategyRunner:
                 }
             
             # Convert to numpy arrays for your existing strategy
-            # Convert datetime to numeric timestamps
             time_array = df['time'].astype(np.int64) // 10**9  # Convert to Unix timestamp
             time_array = time_array.values  # Convert to numpy array
             high = df['high'].values
@@ -97,31 +98,78 @@ class LiveStrategyRunner:
             if len(time_array) > 0:
                 print(f"Time range: {time_array[0]} to {time_array[-1]}")
             
-            # Use your existing strategy modules
-            # For live trading, use the current timestamp
-            current_time = time_array[-1] if len(time_array) > 0 else 0
-            print(f"Current time: {current_time}")
+            # CHECK FOR SETUP ON LAST 3 BARS ONLY
+            # Use your detect_setups function on the entire dataset
+            print("Detecting setups...")
+            try:
+                setups = detect_setups(time_array, high, low, close, open_prices)
+                print(f"Setups detected: {len(setups) if setups is not None else 0}")
+            except Exception as e:
+                print(f"Error in detect_setups: {e}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': None,
+                    'instrument': instrument
+                }
             
+            # Check if there's a setup in the last 3 bars
+            if len(setups) == 0:
+                print(f"No setup found for {instrument}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': None,
+                    'instrument': instrument
+                }
+            
+            # Get the most recent setup
+            most_recent_setup = setups[-1]
+            setup_time = abs(most_recent_setup)  # Remove sign for now
+            
+            # Check if this setup is in the last 3 bars
+            setup_idx = np.where(time_array == setup_time)[0]
+            if len(setup_idx) == 0:
+                print(f"Setup not found in time array for {instrument}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': None,
+                    'instrument': instrument
+                }
+            
+            setup_idx = setup_idx[0]
+            last_3_bars_start = len(time_array) - 3
+            
+            if setup_idx < last_3_bars_start:
+                print(f"Setup found but not in last 3 bars for {instrument}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': None,
+                    'instrument': instrument
+                }
+            
+            print(f"Setup found in last 3 bars for {instrument} at index {setup_idx}")
+            
+            # NOW calculate metrics using the setup time
             print("Calculating metrics...")
             try:
-                metrics = calculate_metrics(current_time, time_array, high, low, close, open_prices)
+                metrics = calculate_metrics(most_recent_setup, time_array, high, low, close, open_prices)
                 print(f"Metrics calculated successfully: {len(metrics)} values")
             except Exception as e:
                 print(f"Error in calculate_metrics: {e}")
                 return {
                     'setup_time': None,
                     'metrics': None,
-                    'current_price': close[-1],
+                    'current_price': None,
                     'instrument': instrument
                 }
             
             print("Normalizing metrics...")
             try:
                 # Unpack the metrics array into individual parameters
-                # Based on calculate_metrics return: [setup_idx, sma, price_range, atr, body1_size, body2_size, body3_size, upwick1, downwick1, upwick2, downwick2, upwick3, downwick3, norm_sma, norm_price_range, norm_body1, norm_body2, norm_body3, norm_upwick1, norm_downwick1, norm_upwick2, norm_downwick2, norm_upwick3, norm_downwick3]
-                
-                # Extract the raw metrics (first 13 values)
-                setup_idx = metrics[0]
+                setup_idx_metric = metrics[0]
                 sma = metrics[1]
                 price_range = metrics[2]
                 atr = metrics[3]
@@ -146,72 +194,48 @@ class LiveStrategyRunner:
                 return {
                     'setup_time': None,
                     'metrics': None,
-                    'current_price': close[-1],
-                    'instrument': instrument
-                }
-            
-            print("Detecting setups...")
-            try:
-                # detect_setups expects raw price arrays, not normalized metrics
-                setups = detect_setups(time_array, high, low, close, open_prices)
-                print(f"Setups detected: {len(setups) if setups is not None else 0}")
-            except Exception as e:
-                print(f"Error in detect_setups: {e}")
-                return {
-                    'setup_time': None,
-                    'metrics': None,
-                    'current_price': close[-1],
+                    'current_price': None,
                     'instrument': instrument
                 }
             
             print("Applying filter...")
             try:
-                # For live trading, we need to handle multiple setups properly
-                if len(setups) > 0:
-                    # The issue is that detect_setups found multiple setups in historical data
-                    # But we only have metrics for the current time
-                    # For live trading, we only care about the most recent setup
-                    
-                    # Get the most recent setup (last in the array)
-                    most_recent_setup = setups[-1] if len(setups) > 0 else None
-                    
-                    if most_recent_setup is not None:
-                        # Create a single setup array with just the most recent setup
-                        recent_setups = np.array([most_recent_setup])
-                        
-                        # Create a metrics array with the current metrics for this setup
-                        current_metrics = np.array([metrics])  # Shape: (1, 25)
-                        
-                        # Apply the constraints from your optimized parameters
-                        constraints = {k: v for k, v in self.parameters.items() if k.startswith('const_')}
-                        
-                        filtered_setups, filtered_metrics = apply_filter(recent_setups, current_metrics, constraints)
-                        print(f"Most recent setup: {most_recent_setup}")
-                        print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
-                    else:
-                        filtered_setups = np.array([])
-                        print(f"Filtered setups: 0 (no recent setup)")
-                else:
-                    filtered_setups = np.array([])
-                    print(f"Filtered setups: 0 (no setups to filter)")
+                # Apply the constraints from your optimized parameters
+                constraints = {k: v for k, v in self.parameters.items() if k.startswith('const_')}
+                
+                # Create metrics array for filtering
+                current_metrics = np.array([metrics])
+                
+                filtered_setups, filtered_metrics = apply_filter(setups, current_metrics, constraints)
+                print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
             except Exception as e:
                 print(f"Error in apply_filter: {e}")
                 return {
                     'setup_time': None,
                     'metrics': None,
-                    'current_price': close[-1],
+                    'current_price': None,
                     'instrument': instrument
                 }
             
-            # Get the most recent setup
-            setup_time = filtered_setups[-1] if len(filtered_setups) > 0 else None
+            # Check if the setup passed the filter
+            if len(filtered_setups) == 0:
+                print(f"Setup filtered out for {instrument}")
+                return {
+                    'setup_time': None,
+                    'metrics': None,
+                    'current_price': None,
+                    'instrument': instrument
+                }
+            
+            # Setup passed all checks!
+            print(f"Setup confirmed for {instrument}")
             
             return {
-                'setup_time': setup_time,
+                'setup_time': most_recent_setup,  # Keep the sign for direction
                 'metrics': norm_metrics,
                 'current_price': close[-1],
-                'current_high': high[-1],  # Add this
-                'current_low': low[-1],    # Add this
+                'current_high': high[-1],
+                'current_low': low[-1],
                 'instrument': instrument
             }
             
@@ -237,7 +261,7 @@ class LiveStrategyRunner:
         account_currency = account_info['account']['currency']
         
         print(f"=== TRADE EXECUTION ===")
-        print(f"Account balance: {current_balance} {account_currency}")
+        print(f"Account balance: {current_balance:.5f} {account_currency}")
         print(f"Account currency: {account_currency}")
         
         # Calculate 1% risk
@@ -245,7 +269,7 @@ class LiveStrategyRunner:
         risk_amount = current_balance * risk_per_trade
         
         print(f"Risk per trade: {risk_per_trade:.2%}")
-        print(f"Risk amount: {risk_amount:.2f} {account_currency}")
+        print(f"Risk amount: {risk_amount:.5f} {account_currency}")
         
         # Calculate proper position size based on currency pair
         instrument = analysis['instrument']
@@ -285,7 +309,7 @@ class LiveStrategyRunner:
         
         print(f"Stop loss pips: {stop_loss_pips}")
         print(f"Calculated units: {units}")
-        print(f"Expected risk: {abs(units) * stop_loss_pips * pip_value / 1000:.2f} {account_currency}")
+        print(f"Expected risk: {abs(units) * stop_loss_pips * pip_value / 1000:.5f} {account_currency}")
 
         # Ensure reasonable position size for margin requirements
         max_units = int(current_balance * 0.1)  # Max 10% of balance as units
