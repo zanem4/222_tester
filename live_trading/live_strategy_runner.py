@@ -256,10 +256,11 @@ class LiveStrategyRunner:
         
         # Calculate stop loss distance based on your 222 pattern strategy
         price_range = analysis['metrics'][2] if analysis['metrics'] is not None else 0.001
-        stop_loss_distance = price_range  # This is the price delta from 222 pattern
+        stop_distance = price_range  # Use actual 222 pattern range
+        tp_distance = price_range * 2.0  # 2.0RR target
         
         print(f"Price range (222 pattern): {price_range:.5f}")
-        print(f"Stop loss distance: {stop_loss_distance:.5f}")
+        print(f"Stop loss distance: {stop_distance:.5f}")
         
         # Calculate pip value in account currency
         if quote_currency == account_currency:
@@ -275,7 +276,7 @@ class LiveStrategyRunner:
         
         # Calculate units based on risk and stop loss distance
         # Convert stop loss distance to pips
-        stop_loss_pips = int(stop_loss_distance * 10000)  # Convert to pips
+        stop_loss_pips = int(stop_distance * 10000)  # Convert to pips
         stop_loss_pips = max(1, stop_loss_pips)  # Ensure at least 1 pip
         
         # Calculate units: risk_amount / (stop_loss_pips * pip_value_per_unit)
@@ -404,19 +405,31 @@ class LiveStrategyRunner:
                 
                 print(f"Monitoring position: {instrument} {units} @ {entry_price}, current: {current_price}")
                 
-                # Calculate stop loss level based on 222 pattern
-                # For now, use a simple ATR-based stop (you'll need to implement the actual 222 pattern stop)
+                # Calculate stop loss and take profit levels
+                # For now, use simple ATR-based levels
                 stop_distance = 0.005  # 50 pips as placeholder
+                tp_distance = 0.010    # 100 pips for 2.0RR
+                
                 if is_long:
                     stop_level = entry_price - stop_distance
+                    tp_level = entry_price + tp_distance
+                    
                     if current_price <= stop_level:
                         print(f"Stop loss hit for {instrument} long position")
-                        self.close_position(instrument, units)
+                        self.close_position(instrument, units, "stop_loss")
+                    elif current_price >= tp_level:
+                        print(f"Take profit hit for {instrument} long position (2.0RR)")
+                        self.close_position(instrument, units, "take_profit")
                 else:
                     stop_level = entry_price + stop_distance
+                    tp_level = entry_price - tp_distance
+                    
                     if current_price >= stop_level:
                         print(f"Stop loss hit for {instrument} short position")
-                        self.close_position(instrument, units)
+                        self.close_position(instrument, units, "stop_loss")
+                    elif current_price <= tp_level:
+                        print(f"Take profit hit for {instrument} short position (2.0RR)")
+                        self.close_position(instrument, units, "take_profit")
                 
                 # Update trade status in logger
                 self.logger.update_trade_status(position_id, current_price, datetime.utcnow())
@@ -424,11 +437,11 @@ class LiveStrategyRunner:
         except Exception as e:
             print(f"Error monitoring positions: {e}")
 
-    def close_position(self, instrument: str, units: int):
+    def close_position(self, instrument: str, units: int, exit_reason: str):
         """Close a position"""
         try:
             result = self.client.close_position(instrument, units)
-            print(f"Position closed: {result}")
+            print(f"Position closed ({exit_reason}): {result}")
             
             # Log the exit
             if hasattr(self, 'logger'):
