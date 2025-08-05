@@ -223,18 +223,26 @@ class LiveTradeLogger:
         return None
     
     def write_trade_record(self, record: Dict):
-        """Write a trade record to the CSV file"""
+        """Write a trade record to the CSV file with 5 decimal place rounding"""
         with open(self.session_log_path, 'a', newline='') as f:
             writer = csv.writer(f)
             writer.writerow([
                 record['timestamp'], record['instrument'], record['action'],
-                record['units'], record['price'], record['order_id'],
+                record['units'], 
+                round(record['price'], 5),  # Round to 5 decimal places
+                record['order_id'],
                 record['setup_time'], record['entry_metrics'], record['exit_reason'],
-                record['exit_price'], record['exit_time'], record['duration_minutes'],
-                record['pnl_pips'], record['pnl_usd'], record['max_rr'],
+                round(record['exit_price'], 5) if record['exit_price'] is not None else '',  # Round to 5 decimal places
+                record['exit_time'], 
+                round(record['duration_minutes'], 5) if record['duration_minutes'] is not None else '',  # Round to 5 decimal places
+                round(record['pnl_pips'], 5) if record['pnl_pips'] is not None else '',  # Round to 5 decimal places
+                round(record['pnl_usd'], 5) if record['pnl_usd'] is not None else '',  # Round to 5 decimal places
+                round(record['max_rr'], 5) if record['max_rr'] is not None else '',  # Round to 5 decimal places
                 record['win_loss'], record['stop_hit'], record['tp_hit'],
-                record['tp_timing'], record['max_drawdown_pips'],
-                record['max_drawdown_pct']
+                round(record['tp_timing'], 5) if record['tp_timing'] is not None else '',  # Round to 5 decimal places
+                round(record['max_drawdown_pips'], 5) if record['max_drawdown_pips'] is not None else '',  # Round to 5 decimal places
+                round(record['max_drawdown_pct'], 5) if record['max_drawdown_pct'] is not None else '',  # Round to 5 decimal places
+                round(record['max_profit_before_stop_pips'], 5) if record['max_profit_before_stop_pips'] is not None else ''  # Round to 5 decimal places
             ])
     
     def get_session_summary(self) -> Dict:
