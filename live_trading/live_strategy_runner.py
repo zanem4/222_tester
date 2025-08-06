@@ -75,6 +75,10 @@ class LiveStrategyRunner:
             df = self.get_market_data(instrument)
             print(f"Got {len(df)} data points for {instrument}")
             
+            # DEBUG: Check raw time data
+            print(f"Raw time data sample: {df['time'].iloc[0]} (type: {type(df['time'].iloc[0])})")
+            print(f"Raw time data sample: {df['time'].iloc[-1]} (type: {type(df['time'].iloc[-1])})")
+            
             # Check if we have enough data
             if len(df) < 3:  # Need at least 3 bars for 222 pattern
                 print(f"Not enough data for {instrument} (need at least 3 bars)")
@@ -86,17 +90,34 @@ class LiveStrategyRunner:
                 }
             
             # Convert to numpy arrays for your existing strategy
-            time_array = df['time'].astype(np.int64) // 10**9  # Convert to Unix timestamp
+            # FIX: Ensure proper time conversion
+            if isinstance(df['time'].iloc[0], str):
+                # If time is string, parse it first
+                time_array = pd.to_datetime(df['time']).astype(np.int64) // 10**9
+            else:
+                # If already datetime, convert directly
+                time_array = df['time'].astype(np.int64) // 10**9
+            
             time_array = time_array.values  # Convert to numpy array
             high = df['high'].values
             low = df['low'].values
             close = df['close'].values
             open_prices = df['open'].values
             
+            # DEBUG: Add current time comparison
+            current_unix_time = int(datetime.utcnow().timestamp())
+            print(f"Current UTC time: {current_unix_time}")
             print(f"Data ranges - High: {high.min():.5f} to {high.max():.5f}")
             print(f"Time array length: {len(time_array)}")
             if len(time_array) > 0:
                 print(f"Time range: {time_array[0]} to {time_array[-1]}")
+                print(f"Most recent bar time: {time_array[-1]}")
+                print(f"Time difference from now: {time_array[-1] - current_unix_time} seconds")
+                
+                # Check if timestamps are in the future
+                if time_array[-1] > current_unix_time:
+                    print(f"WARNING: Most recent bar time is in the future!")
+                    print(f"Expected: <= {current_unix_time}, Got: {time_array[-1]}")
             
             # CHECK FOR SETUP ON LAST 3 BARS ONLY
             # Use your detect_setups function on the entire dataset
