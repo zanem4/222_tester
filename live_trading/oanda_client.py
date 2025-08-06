@@ -88,7 +88,8 @@ class OandaClient:
             })
         
         df = pd.DataFrame(candles)
-        df['time'] = pd.to_datetime(df['time'])
+        # FIX: Ensure proper timezone handling - OANDA returns UTC timestamps
+        df['time'] = pd.to_datetime(df['time'], utc=True)
         return df
     
     def place_market_order(self, instrument: str, units: int, side: str = "buy") -> Dict:
