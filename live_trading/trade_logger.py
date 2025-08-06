@@ -248,7 +248,15 @@ class LiveTradeLogger:
     def get_session_summary(self) -> Dict:
         """Get summary statistics for the current session"""
         if not self.completed_trades:
-            return {'total_trades': 0}
+            return {
+                'total_trades': 0,
+                'winning_trades': 0,
+                'win_rate': 0.0,  # FIX: Always include win_rate
+                'total_pnl_pips': 0.0,
+                'total_pnl_usd': 0.0,
+                'avg_rr': 0.0,
+                'session_id': self.session_id
+            }
         
         total_trades = len(self.completed_trades)
         winning_trades = sum(1 for trade in self.completed_trades if trade['exit']['win_loss'])
