@@ -216,8 +216,8 @@ class LiveStrategyRunner:
                 # Apply the constraints from your optimized parameters
                 constraints = {k: v for k, v in self.parameters.items() if k.startswith('const_')}
                 
-                # Create metrics array for filtering
-                current_metrics = np.array([metrics])
+                # Create metrics array for filtering - FIX: Reshape to 2D array
+                current_metrics = np.array([metrics]).reshape(1, -1)  # Shape: (1, n_metrics)
                 
                 filtered_setups, filtered_metrics = apply_filter(setups, current_metrics, constraints)
                 print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
@@ -533,9 +533,10 @@ class LiveStrategyRunner:
                     summary = self.logger.get_session_summary()
                     print(f"\n=== Session Summary ===")
                     print(f"Total trades: {summary['total_trades']}")
-                    print(f"Win rate: {summary['win_rate']:.2%}")
-                    print(f"Total PnL: {summary['total_pnl_usd']:.2f} USD")
-                    print(f"Average RR: {summary['avg_rr']:.3f}")
+                    if 'win_rate' in summary:  # FIX: Check if win_rate exists
+                        print(f"Win rate: {summary['win_rate']:.2%}")
+                        print(f"Total PnL: {summary['total_pnl_usd']:.2f} USD")
+                        print(f"Average RR: {summary['avg_rr']:.3f}")
                     last_summary_time = datetime.utcnow()
                 
         except KeyboardInterrupt:
@@ -548,6 +549,7 @@ class LiveStrategyRunner:
             summary = self.logger.get_session_summary()
             print(f"\n=== Final Session Summary ===")
             print(f"Total trades: {summary['total_trades']}")
-            print(f"Win rate: {summary['win_rate']:.2%}")
-            print(f"Total PnL: {summary['total_pnl_usd']:.16f} USD")
-            print(f"Average RR: {summary['avg_rr']:.16f}")
+            if 'win_rate' in summary:  # FIX: Check if win_rate exists
+                print(f"Win rate: {summary['win_rate']:.2%}")
+                print(f"Total PnL: {summary['total_pnl_usd']:.16f} USD")
+                print(f"Average RR: {summary['avg_rr']:.16f}")
