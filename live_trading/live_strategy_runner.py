@@ -427,16 +427,16 @@ class LiveStrategyRunner:
                 # Convert numpy arrays to lists for JSON serialization
                 serializable_analysis = {
                     'setup_time': int(analysis['setup_time']) if analysis['setup_time'] is not None else None,
-                    'current_price': float(analysis['current_price']) if analysis['current_price'] is not None else None,
+                    'current_price': round(float(analysis['current_price']), 5) if analysis['current_price'] is not None else None,  # Round to 5 decimal places
                     'instrument': analysis['instrument'],
-                    'metrics': [float(x) for x in analysis['metrics']] if analysis['metrics'] is not None else None
+                    'metrics': [round(float(x), 5) for x in analysis['metrics']] if analysis['metrics'] is not None else None  # Round to 5 decimal places
                 }
                 
                 trade_info = {
                     'order_id': order_result['orderFillTransaction']['id'],
                     'instrument': analysis['instrument'],
                     'units': units,
-                    'price': float(order_result['orderFillTransaction']['price']),
+                    'price': round(float(order_result['orderFillTransaction']['price']), 5),  # Round to 5 decimal places
                     'time': datetime.utcnow(),
                     'analysis': serializable_analysis  # Use serializable version
                 }
