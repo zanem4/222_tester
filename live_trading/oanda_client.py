@@ -186,3 +186,9 @@ class OandaClient:
                 # Fallback to 1.0 if can't get rate
                 print(f"Warning: Could not get exchange rate for {from_currency}/{to_currency}")
                 return 1.0 
+
+    def cancel_order(self, order_id: str) -> Dict:
+        """Cancel a pending order"""
+        url = f"{self.base_url}/v3/accounts/{self.account_id}/orders/{order_id}/cancel"
+        response = requests.put(url, headers=self.headers)
+        return response.json() 
