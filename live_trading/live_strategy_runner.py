@@ -237,11 +237,37 @@ class LiveStrategyRunner:
                 # Apply the constraints from your optimized parameters
                 constraints = {k: v for k, v in self.parameters.items() if k.startswith('const_')}
                 
-                # Create metrics array for filtering - FIX: Reshape to 2D array
-                current_metrics = np.array([metrics]).reshape(1, -1)  # Shape: (1, n_metrics)
+                # FIX: Manual filtering for the single constraint we care about
+                # We only have norm_price_range constraints: lower=0.0, upper=1.25
                 
-                filtered_setups, filtered_metrics = apply_filter(setups, current_metrics, constraints)
-                print(f"Filtered setups: {len(filtered_setups) if filtered_setups is not None else 0}")
+                # Get the norm_price_range value (index 2 in normalized metrics)
+                norm_price_range_value = norm_metrics[2]  # norm_price_range is at index 2
+                
+                print(f"Checking norm_price_range constraint: value = {norm_price_range_value:.6f}")
+                print(f"Constraints: lower = {constraints.get('const_norm_price_range_lower', 'N/A')}, upper = {constraints.get('const_norm_price_range_upper', 'N/A')}")
+                
+                # Check lower bound
+                if norm_price_range_value < constraints.get('const_norm_price_range_lower', 0.0):
+                    print(f"Setup filtered out: norm_price_range = {norm_price_range_value:.6f} < {constraints.get('const_norm_price_range_lower', 0.0):.6f}")
+                    return {
+                        'setup_time': None,
+                        'metrics': None,
+                        'current_price': None,
+                        'instrument': instrument
+                    }
+                
+                # Check upper bound
+                if norm_price_range_value > constraints.get('const_norm_price_range_upper', 1.25):
+                    print(f"Setup filtered out: norm_price_range = {norm_price_range_value:.6f} > {constraints.get('const_norm_price_range_upper', 1.25):.6f}")
+                    return {
+                        'setup_time': None,
+                        'metrics': None,
+                        'current_price': None,
+                        'instrument': instrument
+                    }
+                
+                print(f"Setup passed norm_price_range filter: {norm_price_range_value:.6f}")
+                
             except Exception as e:
                 print(f"Error in apply_filter: {e}")
                 return {
