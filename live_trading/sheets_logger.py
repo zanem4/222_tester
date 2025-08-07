@@ -38,6 +38,7 @@ class GoogleSheetsLogger:
         
     def log_trade_entry(self, trade_info: dict, analysis: dict):
         """Log a trade entry to Google Sheets"""
+        # Round all numeric values to 5 decimal places
         row = [
             datetime.utcnow().isoformat(),
             trade_info['instrument'],
@@ -46,7 +47,7 @@ class GoogleSheetsLogger:
             round(trade_info['price'], 5),  # Round to 5 decimal places
             trade_info['order_id'],
             analysis.get('setup_time', ''),
-            json.dumps(analysis.get('metrics', {})),
+            json.dumps(analysis.get('metrics', {}), default=lambda x: round(float(x), 5) if isinstance(x, (int, float)) else x),  # Round metrics to 5 decimal places
             '',  # exit_reason
             '',  # exit_price
             '',  # exit_time
