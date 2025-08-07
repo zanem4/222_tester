@@ -35,6 +35,7 @@ class LiveStrategyRunner:
         self.parameters = self.load_parameters()
         self.active_positions = {}
         self.trade_history = []
+        self.pending_orders = {}  # Track pending orders for timeout checking
         
         # Initialize trade logger
         self.logger = LiveTradeLogger()
@@ -457,12 +458,50 @@ class LiveStrategyRunner:
                 return {'status': 'success', 'trade': trade_info}
             else:
                 # Order placed but not filled yet
-                print(f"Limit order placed but not filled yet. Order ID: {order_result.get('orderCreateTransaction', {}).get('id')}")
+                order_id = order_result.get('orderCreateTransaction', {}).get('id')
+                print(f"Limit order placed but not filled yet. Order ID: {order_id}")
+                
+                # FIX: Track pending order with timestamp for timeout checking
+                self.pending_orders[order_id] = {
+                    'order_time': datetime.utcnow(),
+                    'instrument': analysis['instrument'],
+                    'units': units,
+                    'price': order_price,
+                    'side': side,
+                    'analysis': analysis
+                }
+                
                 return {'status': 'pending', 'order': order_result}
                 
         except Exception as e:
             return {'status': 'error', 'error': str(e)}
     
+    def check_pending_orders(self):
+        """Check pending orders for timeout (10-bar limit)"""
+        current_time = datetime.utcnow()
+        orders_to_cancel = []
+        
+        for order_id, order_info in self.pending_orders.items():
+            # Calculate time elapsed since order placement
+            time_elapsed = current_time - order_info['order_time']
+            elapsed_minutes = time_elapsed.total_seconds() / 60
+            
+            # 10 bars = 10 minutes (assuming 1-minute bars)
+            max_wait_minutes = self.parameters.get('max_order_wait_bars', 10)
+            
+            if elapsed_minutes >= max_wait_minutes:
+                print(f"Cancelling order {order_id} after {elapsed_minutes:.1f} minutes (timeout)")
+                try:
+                    # Cancel the order
+                    self.client.cancel_order(order_id)
+                    orders_to_cancel.append(order_id)
+                except Exception as e:
+                    print(f"Error cancelling order {order_id}: {e}")
+        
+        # Remove cancelled orders from tracking
+        for order_id in orders_to_cancel:
+            del self.pending_orders[order_id]
+
     def monitor_positions(self):
         """Monitor and manage open positions"""
         try:
@@ -488,6 +527,22 @@ class LiveStrategyRunner:
                 entry_price = float(position['long']['averagePrice'] if is_long else position['short']['averagePrice'])
                 
                 print(f"Monitoring position: {instrument} {units} @ {entry_price}, current: {current_price}")
+                
+                # FIX: Check trade lifetime (50-bar limit)
+                # Get position creation time from trade history
+                position_age_minutes = 0
+                for trade in self.trade_history:
+                    if trade.get('order_id') == position_id:
+                        position_age = datetime.utcnow() - trade['time']
+                        position_age_minutes = position_age.total_seconds() / 60
+                        break
+                
+                max_lifespan_minutes = self.parameters.get('max_trade_lifespan_bars', 50)
+                
+                if position_age_minutes >= max_lifespan_minutes:
+                    print(f"Closing position {position_id} due to max lifespan ({position_age_minutes:.1f} minutes)")
+                    self.close_position(instrument, units, "max_lifespan")
+                    continue
                 
                 # Calculate stop loss and take profit levels
                 # For now, use simple ATR-based levels
@@ -520,7 +575,7 @@ class LiveStrategyRunner:
                 
         except Exception as e:
             print(f"Error monitoring positions: {e}")
-
+    
     def close_position(self, instrument: str, units: int, exit_reason: str):
         """Close a position"""
         try:
@@ -552,6 +607,9 @@ class LiveStrategyRunner:
             
             while True:
                 print(f"\n--- Market Check: {datetime.utcnow()} ---")
+                
+                # FIX: Check pending orders for timeout
+                self.check_pending_orders()
                 
                 # Monitor existing positions
                 self.monitor_positions()
