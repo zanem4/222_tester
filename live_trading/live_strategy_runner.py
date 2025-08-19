@@ -54,16 +54,12 @@ class LiveStrategyRunner:
             return json.load(f)
     
     def get_market_data(self, instrument: str, lookback_hours: int = 24) -> pd.DataFrame:
-        """Get recent market data for analysis"""
-        # Calculate start time
-        start_time = datetime.utcnow() - timedelta(hours=lookback_hours)
-        
-        # Get historical data - LIMIT TO 30 BARS
+        """Get most recent market data for analysis"""
+        # Get the most recent candles by omitting from_time (OANDA returns latest when only count is provided)
         df = self.client.get_historical_data(
             instrument=instrument,
             granularity="M1",  # 1-minute candles
-            count=30,  # ONLY 30 BARS
-            from_time=start_time.isoformat() + "Z"
+            count=30  # last 30 completed bars
         )
         
         print(f"Retrieved {len(df)} bars for {instrument}")
@@ -277,23 +273,13 @@ class LiveStrategyRunner:
                     'current_price': None,
                     'instrument': instrument
                 }
-            
-            # Check if the setup passed the filter
-            if len(filtered_setups) == 0:
-                print(f"Setup filtered out for {instrument}")
-                return {
-                    'setup_time': None,
-                    'metrics': None,
-                    'current_price': None,
-                    'instrument': instrument
-                }
-            
             # Setup passed all checks!
             print(f"Setup confirmed for {instrument}")
             
             return {
                 'setup_time': most_recent_setup,  # Keep the sign for direction
-                'metrics': norm_metrics,
+                'metrics': norm_metrics,  # normalized metrics
+                'price_range_raw': float(price_range),  # use raw price range for sizing
                 'current_price': close[-1],
                 'current_high': high[-1],
                 'current_low': low[-1],
@@ -340,7 +326,10 @@ class LiveStrategyRunner:
         print(f"Currency pair: {base_currency}/{quote_currency}")
         
         # Calculate stop loss distance based on your 222 pattern strategy
-        price_range = analysis['metrics'][2] if analysis['metrics'] is not None else 0.001
+        # Use raw price range from analysis (absolute price units), fall back if missing
+        price_range = analysis.get('price_range_raw') if analysis.get('price_range_raw') is not None else (
+            float(analysis['metrics'][2]) if analysis.get('metrics') is not None else 0.001
+        )
         stop_distance = price_range  # Use actual 222 pattern range
         tp_distance = price_range * 2.0  # 2.0RR target
         
