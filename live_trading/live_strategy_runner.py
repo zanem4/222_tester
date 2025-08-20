@@ -54,12 +54,16 @@ class LiveStrategyRunner:
             return json.load(f)
     
     def get_market_data(self, instrument: str, lookback_hours: int = 24) -> pd.DataFrame:
-        """Get most recent market data for analysis"""
-        # Get the most recent candles by omitting from_time (OANDA returns latest when only count is provided)
+        """Get recent market data for analysis"""
+        # Calculate start time
+        start_time = datetime.utcnow() - timedelta(hours=lookback_hours)
+        
+        # Get historical data - LIMIT TO 30 BARS
         df = self.client.get_historical_data(
             instrument=instrument,
             granularity="M1",  # 1-minute candles
-            count=30  # last 30 completed bars
+            count=30,  # ONLY 30 BARS
+            from_time=start_time.isoformat() + "Z"
         )
         
         print(f"Retrieved {len(df)} bars for {instrument}")
@@ -273,13 +277,13 @@ class LiveStrategyRunner:
                     'current_price': None,
                     'instrument': instrument
                 }
+            
             # Setup passed all checks!
             print(f"Setup confirmed for {instrument}")
             
             return {
                 'setup_time': most_recent_setup,  # Keep the sign for direction
-                'metrics': norm_metrics,  # normalized metrics
-                'price_range_raw': float(price_range),  # use raw price range for sizing
+                'metrics': norm_metrics,
                 'current_price': close[-1],
                 'current_high': high[-1],
                 'current_low': low[-1],
@@ -326,10 +330,7 @@ class LiveStrategyRunner:
         print(f"Currency pair: {base_currency}/{quote_currency}")
         
         # Calculate stop loss distance based on your 222 pattern strategy
-        # Use raw price range from analysis (absolute price units), fall back if missing
-        price_range = analysis.get('price_range_raw') if analysis.get('price_range_raw') is not None else (
-            float(analysis['metrics'][2]) if analysis.get('metrics') is not None else 0.001
-        )
+        price_range = analysis['metrics'][2] if analysis['metrics'] is not None else 0.001
         stop_distance = price_range  # Use actual 222 pattern range
         tp_distance = price_range * 2.0  # 2.0RR target
         
@@ -520,10 +521,12 @@ class LiveStrategyRunner:
                 # FIX: Check trade lifetime (50-bar limit)
                 # Get position creation time from trade history
                 position_age_minutes = 0
+                setup_info = None
                 for trade in self.trade_history:
                     if trade.get('order_id') == position_id:
                         position_age = datetime.utcnow() - trade['time']
                         position_age_minutes = position_age.total_seconds() / 60
+                        setup_info = trade.get('analysis', {})
                         break
                 
                 max_lifespan_minutes = self.parameters.get('max_trade_lifespan_bars', 50)
@@ -533,31 +536,64 @@ class LiveStrategyRunner:
                     self.close_position(instrument, units, "max_lifespan")
                     continue
                 
-                # Calculate stop loss and take profit levels
-                # For now, use simple ATR-based levels
-                stop_distance = 0.005  # 50 pips as placeholder
-                tp_distance = 0.010    # 100 pips for 2.0RR
-                
-                if is_long:
-                    stop_level = entry_price - stop_distance
-                    tp_level = entry_price + tp_distance
+                # Calculate stop loss and take profit levels using 222 pattern strategy
+                if setup_info and setup_info.get('metrics'):
+                    # Get the price range from the 222 pattern
+                    price_range = float(setup_info['metrics'][2])  # price_range is at index 2
                     
-                    if current_price <= stop_level:
-                        print(f"Stop loss hit for {instrument} long position")
-                        self.close_position(instrument, units, "stop_loss")
-                    elif current_price >= tp_level:
-                        print(f"Take profit hit for {instrument} long position (2.0RR)")
-                        self.close_position(instrument, units, "take_profit")
+                    # Calculate stop and target levels based on 222 pattern
+                    if is_long:
+                        # For long: stop = entry_price - price_range, target = entry_price + (2.0 * price_range)
+                        stop_level = entry_price - price_range
+                        tp_level = entry_price + (2.0 * price_range)
+                    else:
+                        # For short: stop = entry_price + price_range, target = entry_price - (2.0 * price_range)
+                        stop_level = entry_price + price_range
+                        tp_level = entry_price - (2.0 * price_range)
+                    
+                    print(f"222 Pattern levels - Stop: {stop_level:.5f}, Target: {tp_level:.5f}, Range: {price_range:.5f}")
+                    
+                    # Check exit conditions
+                    if is_long:
+                        if current_price <= stop_level:
+                            print(f"Stop loss hit for {instrument} long position")
+                            self.close_position(instrument, units, "stop_loss")
+                        elif current_price >= tp_level:
+                            print(f"Take profit hit for {instrument} long position (2.0RR)")
+                            self.close_position(instrument, units, "take_profit")
+                    else:
+                        if current_price >= stop_level:
+                            print(f"Stop loss hit for {instrument} short position")
+                            self.close_position(instrument, units, "stop_loss")
+                        elif current_price <= tp_level:
+                            print(f"Take profit hit for {instrument} short position (2.0RR)")
+                            self.close_position(instrument, units, "take_profit")
                 else:
-                    stop_level = entry_price + stop_distance
-                    tp_level = entry_price - tp_distance
+                    # Fallback to placeholder levels if setup info not available
+                    print(f"Warning: No setup info available for position {position_id}, using placeholder levels")
+                    stop_distance = 0.005  # 50 pips as placeholder
+                    tp_distance = 0.010    # 100 pips for 2.0RR
                     
-                    if current_price >= stop_level:
-                        print(f"Stop loss hit for {instrument} short position")
-                        self.close_position(instrument, units, "stop_loss")
-                    elif current_price <= tp_level:
-                        print(f"Take profit hit for {instrument} short position (2.0RR)")
-                        self.close_position(instrument, units, "take_profit")
+                    if is_long:
+                        stop_level = entry_price - stop_distance
+                        tp_level = entry_price + tp_distance
+                        
+                        if current_price <= stop_level:
+                            print(f"Stop loss hit for {instrument} long position (placeholder)")
+                            self.close_position(instrument, units, "stop_loss")
+                        elif current_price >= tp_level:
+                            print(f"Take profit hit for {instrument} long position (placeholder)")
+                            self.close_position(instrument, units, "take_profit")
+                    else:
+                        stop_level = entry_price + stop_distance
+                        tp_level = entry_price - tp_distance
+                        
+                        if current_price >= stop_level:
+                            print(f"Stop loss hit for {instrument} short position (placeholder)")
+                            self.close_position(instrument, units, "stop_loss")
+                        elif current_price <= tp_level:
+                            print(f"Take profit hit for {instrument} short position (placeholder)")
+                            self.close_position(instrument, units, "take_profit")
                 
                 # Update trade status in logger
                 self.logger.update_trade_status(position_id, current_price, datetime.utcnow())
